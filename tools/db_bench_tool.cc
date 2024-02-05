@@ -1457,16 +1457,16 @@ DEFINE_bool(rate_limiter_auto_tuned, false,
 DEFINE_bool(sine_write_rate, false, "Use a sine wave write_rate_limit");
 
 DEFINE_uint64(
-    sine_write_rate_interval_milliseconds, 10000,
+    sine_write_rate_interval_milliseconds, 1000,
     "Interval of which the sine wave write_rate_limit is recalculated");
 
-DEFINE_double(sine_a, 1, "A in f(x) = A sin(bx + c) + d");
+DEFINE_double(sine_a, 50000, "A in f(x) = A sin(bx + c) + d");
 
-DEFINE_double(sine_b, 1, "B in f(x) = A sin(bx + c) + d");
+DEFINE_double(sine_b, 0.01, "B in f(x) = A sin(bx + c) + d");
 
 DEFINE_double(sine_c, 0, "C in f(x) = A sin(bx + c) + d");
 
-DEFINE_double(sine_d, 1, "D in f(x) = A sin(bx + c) + d");
+DEFINE_double(sine_d, 200000, "D in f(x) = A sin(bx + c) + d");
 
 DEFINE_bool(rate_limit_bg_reads, false,
             "Use options.rate_limiter on compaction reads");
@@ -1518,9 +1518,9 @@ DEFINE_double(iter_k, 2.517,
 DEFINE_double(iter_sigma, 14.236,
               "The parameter 'sigma' of Generized Pareto Distribution "
               "f(x)=(1/sigma)*(1+k*(x-theta)/sigma)^-(1/k+1)");
-DEFINE_double(mix_get_ratio, 1.0,
+DEFINE_double(mix_get_ratio, 0.0,
               "The ratio of Get queries of mix_graph workload");
-DEFINE_double(mix_put_ratio, 0.0,
+DEFINE_double(mix_put_ratio, 1.0,
               "The ratio of Put queries of mix_graph workload");
 DEFINE_double(mix_seek_ratio, 0.0,
               "The ratio of Seek queries of mix_graph workload");
@@ -1567,8 +1567,7 @@ DEFINE_bool(mmap_write, ROCKSDB_NAMESPACE::Options().allow_mmap_writes,
 DEFINE_bool(use_direct_reads, ROCKSDB_NAMESPACE::Options().use_direct_reads,
             "Use O_DIRECT for reading data");
 
-DEFINE_bool(use_direct_io_for_flush_and_compaction,
-            ROCKSDB_NAMESPACE::Options().use_direct_io_for_flush_and_compaction,
+DEFINE_bool(use_direct_io_for_flush_and_compaction, true,
             "Use O_DIRECT for background flush and compaction writes");
 
 DEFINE_bool(advise_random_on_open,
@@ -5013,7 +5012,9 @@ class Benchmark {
   }
 
   double SineRate(double x) {
-    return FLAGS_sine_a * sin((FLAGS_sine_b * x) + FLAGS_sine_c) + FLAGS_sine_d;
+    int kv_size = FLAGS_value_size + FLAGS_key_size;
+    double sine_rate = FLAGS_sine_a * sin((FLAGS_sine_b * x) + FLAGS_sine_c) + FLAGS_sine_d;
+    return sine_rate * kv_size;
   }
 
   void DoWrite(ThreadState* thread, WriteMode write_mode) {

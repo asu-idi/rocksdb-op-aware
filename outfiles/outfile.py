@@ -119,7 +119,7 @@ def plot_graph(file_name):
     # Plot compaction time
     ax2 = ax1.twinx()
     ax2.set_ylabel('Compaction Time', color='tab:blue')
-    ax2.plot(compaction_time_period, compaction_level_value, color='tab:blue')
+    ax2.plot(compaction_time_period, compaction_level_value, color='tab:blue', marker='+')
     ax2.set_ylim(bottom=-1, top=6)
     ax1.set_zorder(ax2.get_zorder() + 1)
     ax1.patch.set_visible(False)
@@ -132,8 +132,6 @@ def plot_graph(file_name):
     ax4.set_zorder(ax2.get_zorder() + 1)
     ax1.patch.set_visible(False)
 
-    print(manual_compaction_time_period, manual_compaction_level_value)
-
     # create a third y-axis for ideal ops per second
     ax3 = ax1.twinx()
     ax3.set_ylim(bottom=0, top=350000)
@@ -141,10 +139,8 @@ def plot_graph(file_name):
     target_timestamps, target_values = zip(*target_ops_per_second)
     ax3.tick_params(axis='y', labelcolor='tab:green')
     ax3.set_ylim(bottom=0, top=350000)
-    ax3.plot(target_timestamps, target_values, color='tab:green')
-
-
-
+    # Remove for sine wave implementation only
+    # ax3.plot(target_timestamps, target_values, color='tab:green')
 
     plt.title('Operations and Compaction vs Time')
 
@@ -152,4 +148,4 @@ def plot_graph(file_name):
     fig.set_size_inches(18.5, 5.5)
     fig.savefig(file_name + '.png', dpi=300, bbox_inches='tight')
 
-plot_graph('bm2_modified3')
+plot_graph('r4/default')
