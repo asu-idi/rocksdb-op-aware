@@ -1462,11 +1462,11 @@ DEFINE_uint64(
 
 DEFINE_double(sine_a, 50000, "A in f(x) = A sin(bx + c) + d");
 
-DEFINE_double(sine_b, 0.01, "B in f(x) = A sin(bx + c) + d");
+DEFINE_double(sine_b, 0.2, "B in f(x) = A sin(bx + c) + d");
 
 DEFINE_double(sine_c, 0, "C in f(x) = A sin(bx + c) + d");
 
-DEFINE_double(sine_d, 200000, "D in f(x) = A sin(bx + c) + d");
+DEFINE_double(sine_d, 100000, "D in f(x) = A sin(bx + c) + d");
 
 DEFINE_bool(rate_limit_bg_reads, false,
             "Use options.rate_limiter on compaction reads");
