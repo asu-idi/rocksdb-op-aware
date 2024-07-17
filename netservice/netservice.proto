@@ -3,7 +3,7 @@ syntax = "proto3";
 package netservice;
 
 service NetService {
-  rpc OperationService(stream OperationRequest) returns (OperationResponse) {}
+  rpc OperationService(OperationRequest) returns (OperationResponse) {}
 }
 
 message OperationRequest {

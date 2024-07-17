@@ -52,15 +52,28 @@ void ThreadPool::workerThread() {
 NetClient::NetClient(std::shared_ptr<grpc::Channel> channel, size_t threadPoolSize)
     : stub_(NetService::NewStub(channel)), threadPool(threadPoolSize) {}
 
-bool NetClient::OperationService(const std::string& operation, const std::string& key, const std::string& value) {
-    threadPool.enqueue([this, operation, key, value] { operationService(operation, key, value); });
+std::string NetClient::GetBatchData(const std::string& key, const std::string& value) {
+    std::lock_guard<std::mutex> lock(mtx);
+    request.add_keys(key);
+    request.add_values(value);
+    return "OK";
+}
+
+bool NetClient::StartStream() {
+    std::lock_guard<std::mutex> lock(mtx);
+    stream_writer_ = stub_->OperationService(&stream_context_, &stream_response_);
+    return stream_writer_ != nullptr;
+}
+
+bool NetClient::WriteToStream(const std::string& operation, const std::string& key, const std::string& value) {
+    threadPool.enqueue([this, operation, key, value] { writeOperation(operation, key, value); });
     return true;
 }
 
-void NetClient::operationService(const std::string& operation, const std::string& key, const std::string& value) {
+void NetClient::writeOperation(const std::string& operation, const std::string& key, const std::string& value) {
     std::lock_guard<std::mutex> lock(mtx);
+    if (!stream_writer_) return;
 
-    OperationRequest request;
     if (operation == "Put") {
         request.set_operation(OperationRequest::Put);
     } else if (operation == "Get") {
@@ -76,11 +89,19 @@ void NetClient::operationService(const std::string& operation, const std::string
     request.add_keys(key);
     request.add_values(value);
 
-    OperationResponse response;
-    grpc::ClientContext context;
-    grpc::Status status = stub_->OperationService(&context, request, &response);
+    stream_writer_->Write(request);
+}
 
-    if (!status.ok()) {
-        std::cerr << "RPC failed: " << status.error_message() << std::endl;
+std::string NetClient::FinishStream() {
+    std::lock_guard<std::mutex> lock(mtx);
+    if (!stream_writer_) return "Stream not started";
+
+    stream_writer_->WritesDone();
+    grpc::Status status = stream_writer_->Finish();
+
+    if (status.ok()) {
+        return stream_response_.result();
+    } else {
+        return "RPC failed";
     }
 }
