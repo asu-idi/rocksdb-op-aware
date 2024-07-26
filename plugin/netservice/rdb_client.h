@@ -10,7 +10,8 @@
 #include <condition_variable>
 #include <queue>
 #include <grpcpp/grpcpp.h>
-#include "netservice.grpc.pb.h"  
+
+#include "netservice.grpc.pb.h"
 
 using grpc::Channel;
 using grpc::ClientContext;

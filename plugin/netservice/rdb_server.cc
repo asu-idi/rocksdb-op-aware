@@ -2,6 +2,7 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <gflags/gflags.h>
 
 // GRPC
 #include <grpcpp/grpcpp.h>
@@ -32,6 +33,7 @@
 
 #include <queue>
 
+
 using grpc::Server;
 using grpc::ServerAsyncResponseWriter;
 using grpc::ServerBuilder;
@@ -55,28 +57,42 @@ using ROCKSDB_NAMESPACE::NewLRUCache;
 using ROCKSDB_NAMESPACE::Options;
 using ROCKSDB_NAMESPACE::Slice;
 
+using GFLAGS_NAMESPACE::ParseCommandLineFlags;
+using GFLAGS_NAMESPACE::RegisterFlagValidator;
+using GFLAGS_NAMESPACE::SetUsageMessage;
+using GFLAGS_NAMESPACE::SetVersionString;
+
+
 // Global variables
 std::queue<std::string> optimizationQueue;
 rocksdb::DB* db_;
 
+// Command line flags
+DEFINE_string(hdfs_path, "false", "HDFS path to store data");
+DEFINE_string(db, "tmp/test_db", "Path of the RocksDB database");
+DEFINE_string(server_address, "0.0.0.0:50050", "Address to run the server");
+DEFINE_string(options_file, "../plugin/netservice/db_bench_options.ini", "Path to the options file");
+
+
 class NetServiceImpl final {
  public:
-  NetServiceImpl(const std::string& db_path) {
+  NetServiceImpl() {
+
     Options options;
-    options.create_if_missing = true;
-    // Load options from a file
     ConfigOptions config_options;
     std::vector<ColumnFamilyDescriptor> cf_descs;
 
     rocksdb::Status status = rocksdb::LoadOptionsFromFile(
-        config_options, "../db_bench_options.ini", &options, &cf_descs);
+        config_options, FLAGS_options_file, &options, &cf_descs);
 
-    // std::unique_ptr<rocksdb::Env> hdfs;
-    // rocksdb::NewHdfsEnv("hdfs://localhost:9000/", &hdfs);
+    if (FLAGS_hdfs_path != "false") {
+      std::unique_ptr<rocksdb::Env> hdfs;
+      rocksdb::NewHdfsEnv(FLAGS_hdfs_path, &hdfs);
 
-    // options.env = hdfs.get();
+      options.env = hdfs.get();
+    }
 
-    status = DB::Open(options, db_path, &db_);
+    status = DB::Open(options, FLAGS_db, &db_);
     if (!status.ok()) {
       std::cerr << "Error opening database: " << status.ToString() << std::endl;
       exit(1);
@@ -90,15 +106,15 @@ class NetServiceImpl final {
     delete db_;
   }
 
-  void RunGRPCServer(const std::string& server_address) {
+  void RunGRPCServer() {
     ServerBuilder builder;
-    builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+    builder.AddListeningPort(FLAGS_server_address, grpc::InsecureServerCredentials());
     builder.RegisterService(&service_);
 
     cq_ = builder.AddCompletionQueue();
     server_ = builder.BuildAndStart();
 
-    std::cout << "Server listening on " << server_address << std::endl;
+    std::cout << "Server listening on " << FLAGS_server_address << std::endl;
     HandleRPCs();
   }
 
@@ -132,8 +148,6 @@ class NetServiceImpl final {
 
    private:
     void HandleRequest() {
-      fprintf(stderr, "Received request for operation: %d\n",
-              request_.operation());
       switch (request_.operation()) {
         case OperationRequest::Put: {
           rocksdb::Status status = db_->Put(
@@ -247,10 +261,9 @@ void RunOptimizationService() {
   }
 }
 
-int main() {
-  std::string server_address = "0.0.0.0:50050";
-  std::string db_path = "/data/viraj/tmp_db";
-  int thread_pool_size = 10;
+int main(int argc, char** argv) {
+
+  ParseCommandLineFlags(&argc, &argv, true);
 
   // Create a thread to run the UDP server
   std::thread udp_server(RunUDPServer);
@@ -260,8 +273,8 @@ int main() {
   std::thread optimization_service(RunOptimizationService);
   optimization_service.detach();
 
-  NetServiceImpl service(db_path);
-  service.RunGRPCServer(server_address);
+  NetServiceImpl service;
+  service.RunGRPCServer();
 
   return 0;
 }
