@@ -1,8 +1,9 @@
+#include <gflags/gflags.h>
+
 #include <iostream>
 #include <memory>
 #include <string>
 #include <thread>
-#include <gflags/gflags.h>
 
 // GRPC
 #include <grpcpp/grpcpp.h>
@@ -33,7 +34,6 @@
 
 #include <queue>
 
-
 using grpc::Server;
 using grpc::ServerAsyncResponseWriter;
 using grpc::ServerBuilder;
@@ -62,22 +62,22 @@ using GFLAGS_NAMESPACE::RegisterFlagValidator;
 using GFLAGS_NAMESPACE::SetUsageMessage;
 using GFLAGS_NAMESPACE::SetVersionString;
 
-
 // Global variables
 std::queue<std::string> optimizationQueue;
 rocksdb::DB* db_;
+std::unique_ptr<Server> server;
+int key_count = 0;
 
 // Command line flags
 DEFINE_string(hdfs_path, "false", "HDFS path to store data");
 DEFINE_string(db, "tmp/test_db", "Path of the RocksDB database");
 DEFINE_string(server_address, "0.0.0.0:50050", "Address to run the server");
-DEFINE_string(options_file, "../plugin/netservice/db_bench_options.ini", "Path to the options file");
+DEFINE_string(options_file, "../plugin/netservice/db_bench_options.ini",
+              "Path to the options file");
 
-
-class NetServiceImpl final {
+class NetServiceImpl final : public NetService::Service {
  public:
   NetServiceImpl() {
-
     Options options;
     ConfigOptions config_options;
     std::vector<ColumnFamilyDescriptor> cf_descs;
@@ -100,113 +100,73 @@ class NetServiceImpl final {
   }
 
   ~NetServiceImpl() {
-    server_->Shutdown();
-    cq_->Shutdown();
+    server->Shutdown();
 
     delete db_;
   }
 
-  void RunGRPCServer() {
-    ServerBuilder builder;
-    builder.AddListeningPort(FLAGS_server_address, grpc::InsecureServerCredentials());
-    builder.RegisterService(&service_);
-
-    cq_ = builder.AddCompletionQueue();
-    server_ = builder.BuildAndStart();
-
-    std::cout << "Server listening on " << FLAGS_server_address << std::endl;
-    HandleRPCs();
-  }
-
- private:
-  class CallData {
-   public:
-    CallData(NetService::AsyncService* service, ServerCompletionQueue* cq,
-             rocksdb::DB* db)
-        : service_(service),
-          cq_(cq),
-          responder_(&ctx_),
-          status_(CREATE),
-          db_(db) {
-      Proceed();
-    }
-
-    void Proceed() {
-      if (status_ == CREATE) {
-        status_ = PROCESS;
-        service_->RequestOperationService(&ctx_, &request_, &responder_, cq_,
-                                          cq_, this);
-      } else if (status_ == PROCESS) {
-        new CallData(service_, cq_, db_);
-        HandleRequest();
-        status_ = FINISH;
-        responder_.Finish(response_, Status::OK, this);
-      } else {
-        delete this;
-      }
-    }
-
-   private:
-    void HandleRequest() {
-      switch (request_.operation()) {
-        case OperationRequest::Put: {
-          rocksdb::Status status = db_->Put(
-              rocksdb::WriteOptions(), request_.keys(0), request_.values(0));
-          response_.set_result(status.ok() ? "OK" : status.ToString());
-          break;
-        }
-        case OperationRequest::BatchPut: {
-          rocksdb::WriteBatch batch;
-          for (int i = 0; i < request_.keys_size(); i++) {
-            batch.Put(request_.keys(i), request_.values(i));
+  Status OperationService(ServerContext* context,
+                          const OperationRequest* request,
+                          OperationResponse* response) override {
+    rocksdb::Status status;
+    switch (request->operation()) {
+      case OperationRequest::Put: {
+        for (int i = 0; i < request->keys_size(); i++) {
+          status = db_->Put(rocksdb::WriteOptions(), request->keys(i),
+                            request->values(i));
+          if (!status.ok()) {
+            break;
           }
-          rocksdb::Status status = db_->Write(rocksdb::WriteOptions(), &batch);
-          response_.set_result(status.ok() ? "OK" : status.ToString());
-          break;
+          key_count++;
         }
-        case OperationRequest::Get: {
-          std::string value;
-          rocksdb::Status status =
-              db_->Get(rocksdb::ReadOptions(), request_.keys(0), &value);
-          response_.set_result(status.ok() ? value : status.ToString());
-          break;
-        }
-        case OperationRequest::Delete: {
-          rocksdb::Status status =
-              db_->Delete(rocksdb::WriteOptions(), request_.keys(0));
-          response_.set_result(status.ok() ? "OK" : status.ToString());
-          break;
-        }
-        default:
-          response_.set_result("Unknown operation");
+        break;
       }
+      case OperationRequest::BatchPut: {
+        rocksdb::WriteBatch batch;
+        for (int i = 0; i < request->keys_size(); i++) {
+          batch.Put(request->keys(i), request->values(i));
+        }
+        status = db_->Write(rocksdb::WriteOptions(), &batch);
+        break;
+      }
+      case OperationRequest::Get: {
+        std::string value;
+        status = db_->Get(rocksdb::ReadOptions(), request->keys(0), &value);
+        break;
+      }
+      case OperationRequest::Delete: {
+        status = db_->Delete(rocksdb::WriteOptions(), request->keys(0));
+        break;
+      }
+      default:
+        response->set_result("Unknown operation");
     }
 
-    NetService::AsyncService* service_;
-    ServerCompletionQueue* cq_;
-    ServerContext ctx_;
-    OperationRequest request_;
-    OperationResponse response_;
-    ServerAsyncResponseWriter<OperationResponse> responder_;
-    enum CallStatus { CREATE, PROCESS, FINISH };
-    CallStatus status_;
-    rocksdb::DB* db_;
-  };
-
-  void HandleRPCs() {
-    new CallData(&service_, cq_.get(), db_);
-    void* tag;
-    bool ok;
-    while (true) {
-      cq_->Next(&tag, &ok);
-      static_cast<CallData*>(tag)->Proceed();
+    if (status.ok()) {
+      response->set_result("OK");
+    } else {
+      response->set_result(status.ToString());
     }
+
+    fprintf(stderr, "Key count: %d\n", key_count);
+
+    return Status::OK;
   }
-
-  NetService::AsyncService service_;
-  std::unique_ptr<Server> server_;
-  std::unique_ptr<ServerCompletionQueue> cq_;
 };
+
+void RunGRPCServer() {
+  NetServiceImpl service;
+  ServerBuilder builder;
+
+  builder.AddListeningPort(FLAGS_server_address,
+                           grpc::InsecureServerCredentials());
+  builder.RegisterService(&service);
+
+  server = builder.BuildAndStart();
+
+  std::cout << "Server listening on " << FLAGS_server_address << std::endl;
+  server->Wait();
+}
 
 // An additional UDP server to constantly listen for Optimization requests.
 void RunUDPServer() {
@@ -262,7 +222,6 @@ void RunOptimizationService() {
 }
 
 int main(int argc, char** argv) {
-
   ParseCommandLineFlags(&argc, &argv, true);
 
   // Create a thread to run the UDP server
@@ -273,8 +232,7 @@ int main(int argc, char** argv) {
   std::thread optimization_service(RunOptimizationService);
   optimization_service.detach();
 
-  NetServiceImpl service;
-  service.RunGRPCServer();
+  RunGRPCServer();
 
   return 0;
 }

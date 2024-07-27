@@ -1,56 +1,64 @@
 #include "rdb_client.h"
 
-ThreadPool::ThreadPool(size_t numThreads) : stop(false) {
-    for (size_t i = 0; i < numThreads; ++i) {
-        workers.emplace_back(&ThreadPool::workerThread, this);
+OperationRequest request;
+NetClient::NetClient(std::shared_ptr<grpc::Channel> channel) : stub_(NetService::NewStub(channel)) {}
+
+void SetOperation(const std::string& operation) {
+    if (operation == "Put") {
+        request.set_operation(OperationRequest::Put);
+    } else if (operation == "Get") {
+        request.set_operation(OperationRequest::Get);
+    } else if (operation == "Delete") {
+        request.set_operation(OperationRequest::Delete);
+    } else if (operation == "BatchPut") {
+        request.set_operation(OperationRequest::BatchPut);
     }
 }
 
-ThreadPool::~ThreadPool() {
-    {
-        std::unique_lock<std::mutex> lock(queueMutex);
-        stop = true;
-    }
-    condition.notify_all();
-    for (std::thread &worker : workers) {
-        worker.join();
-    }
-}
+bool NetClient::BufferedWriter(const std::string& operation, const std::string& key, const std::string& value) {
 
-void ThreadPool::enqueue(std::function<void()> task) {
-    {
-        std::unique_lock<std::mutex> lock(queueMutex);
-        tasks.push(std::move(task));
-    }
-    condition.notify_one();
-}
+    SetOperation(operation);
+    request.add_keys(key);
+    request.add_values(value);
 
-void ThreadPool::workerThread() {
-    while (true) {
-        std::function<void()> task;
-        {
-            std::unique_lock<std::mutex> lock(queueMutex);
-            condition.wait(lock, [this] { return stop || !tasks.empty(); });
-            if (stop && tasks.empty()) return;
-            task = std::move(tasks.front());
-            tasks.pop();
+    if (request.keys_size() >= 7500) {
+        OperationResponse response;
+        grpc::ClientContext context;
+        grpc::Status status = stub_->OperationService(&context, request, &response);
+
+        if (!status.ok()) {
+            std::cerr << "RPC failed: " << status.error_message() << std::endl;
+            return false;
         }
-        task();
+
+        request.clear_keys();
+        request.clear_values();
     }
-}
 
-NetClient::NetClient(std::shared_ptr<grpc::Channel> channel, size_t threadPoolSize)
-    : stub_(NetService::NewStub(channel)), threadPool(threadPoolSize) {}
-
-bool NetClient::OperationService(const std::string& operation, const std::string& key, const std::string& value) {
-    threadPool.enqueue([this, operation, key, value] { operationService(operation, key, value); });
     return true;
 }
 
-void NetClient::operationService(const std::string& operation, const std::string& key, const std::string& value) {
-    std::lock_guard<std::mutex> lock(mtx);
+bool NetClient::FlushBuffer() {
+    if (request.keys_size() == 0) {
+        return true;
+    }
 
-    OperationRequest request;
+    OperationResponse response;
+    grpc::ClientContext context;
+    grpc::Status status = stub_->OperationService(&context, request, &response);
+
+    if (!status.ok()) {
+        std::cerr << "RPC failed: " << status.error_message() << std::endl;
+        return false;
+    }
+
+    request.clear_keys();
+    request.clear_values();
+    return true;
+}
+
+bool NetClient::OperationService(const std::string& operation, const std::string& key, const std::string& value) {
+
     if (operation == "Put") {
         request.set_operation(OperationRequest::Put);
     } else if (operation == "Get") {
@@ -60,7 +68,7 @@ void NetClient::operationService(const std::string& operation, const std::string
     } else if (operation == "BatchPut") {
         request.set_operation(OperationRequest::BatchPut);
     } else {
-        return;
+        return false;
     }
 
     request.add_keys(key);
@@ -72,5 +80,8 @@ void NetClient::operationService(const std::string& operation, const std::string
 
     if (!status.ok()) {
         std::cerr << "RPC failed: " << status.error_message() << std::endl;
+        return false;
     }
+
+    return true;
 }

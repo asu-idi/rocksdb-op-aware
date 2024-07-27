@@ -18,7 +18,7 @@ int main() {
     std::string value_prefix = "value";
 
     // Create the NetClient instance once
-    NetClient client(grpc::CreateChannel(server_address, grpc::InsecureChannelCredentials()), 10);
+    NetClient client(grpc::CreateChannel(server_address, grpc::InsecureChannelCredentials()));
 
     // Start the streaming RPC
     // if (!client.StartStream()) {

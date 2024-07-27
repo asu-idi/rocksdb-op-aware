@@ -5138,11 +5138,8 @@ class Benchmark {
     size_t id = 0;
     int64_t num_range_deletions = 0;
 
-    NetClient client(grpc::CreateChannel(FLAGS_netservice_server_url, grpc::InsecureChannelCredentials()), 1);
-    // if (!client.StartStream()) {
-    //     std::cerr << "Failed to start stream" << std::endl;
-    //     exit(1);
-    // }
+    // Viraj: For NetService
+    NetClient client(grpc::CreateChannel(FLAGS_netservice_server_url, grpc::InsecureChannelCredentials()));
 
     while ((num_per_key_gen != 0) && !duration.Done(entries_per_batch_)) {
       if (duration.GetStage() != stage) {
@@ -5302,8 +5299,8 @@ class Benchmark {
             s = blobdb->Put(write_options_, key, val);
           }
         } else if (FLAGS_num_column_families <= 1) {
-        #ifdef NETSERVICE 
-          // client.WriteToStream("Put", key.data(), val.data());
+        #ifdef NETSERVICE
+          client.BufferedWriter("Put", key.data(), val.data());
         #else
           batch.Put(key, val);
         #endif
@@ -5400,8 +5397,8 @@ class Benchmark {
       if (!use_blob_db_) {
         // Not stacked BlobDB
         #ifdef NETSERVICE
-          // client.BatchPut(batch);
-          client.OperationService("Put", "k0", "v0");
+          // Viraj: ToDo: Needs to be done after DoWrite is done
+          // client.FlushBuffer();
         #else
           s = db_with_cfh->db->Write(write_options_, &batch);
         #endif
