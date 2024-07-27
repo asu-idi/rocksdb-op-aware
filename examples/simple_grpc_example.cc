@@ -20,31 +20,16 @@ int main() {
     // Create the NetClient instance once
     NetClient client(grpc::CreateChannel(server_address, grpc::InsecureChannelCredentials()));
 
-    // Start the streaming RPC
-    // if (!client.StartStream()) {
-    //     std::cerr << "Failed to start stream" << std::endl;
-    //     return 1;
-    // } else {
-    //     std::cout << "Stream started" << std::endl;
-    // }
-
     // Loop 1000000 times to send data
     for (int i = 0; i < 1000000; i++) {
         std::string key = key_prefix + std::to_string(i);
         std::string value = value_prefix + std::to_string(i);
 
-        // if (!client.WriteToStream(operation, key, value)) {
-        //     std::cerr << "Failed to write to stream" << std::endl;
-        //     break;
-        // }
-        client.OperationService(operation, key, value);
+        client.BufferedWriter("Put", key, value);
     }
 
     // Finish the streaming RPC and get the result
-    // std::string result = client.FinishStream();
-
-    // Print the result
-    // std::cout << "Result: " << result << std::endl;
+    client.FlushBuffer();
 
     return 0;
 }
