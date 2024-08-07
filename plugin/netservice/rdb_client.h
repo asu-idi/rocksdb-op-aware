@@ -5,6 +5,10 @@
 #include <memory>
 #include <string>
 #include <grpcpp/grpcpp.h>
+#include <thread>
+#include <mutex>
+#include <queue>
+#include <condition_variable>
 
 #include "netservice.grpc.pb.h"
 
@@ -21,9 +25,9 @@ using netservice::OperationResponse;
 class NetClient {
 public:
     NetClient(std::shared_ptr<grpc::Channel> channel);
-    bool OperationService(const std::string& operation, const std::string& key, const std::string& value);
     bool FlushBuffer();
     bool BufferedWriter(const std::string& operation, const std::string& key, const std::string& value);
+    void SendRequestsFromQueue();
 
 private:
     std::unique_ptr<NetService::Stub> stub_;
