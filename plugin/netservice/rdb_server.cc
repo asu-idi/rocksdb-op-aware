@@ -80,18 +80,30 @@ class NetServiceImpl final : public NetService::Service {
   NetServiceImpl() {
     Options options;
     ConfigOptions config_options;
+    rocksdb::Status status;
+    rocksdb::Env* env = rocksdb::Env::Default();
     std::vector<ColumnFamilyDescriptor> cf_descs;
 
-    rocksdb::Status status = rocksdb::LoadOptionsFromFile(
-        config_options, FLAGS_options_file, &options, &cf_descs);
-
     if (FLAGS_hdfs_path != "false") {
-      std::unique_ptr<rocksdb::Env> hdfs;
-      rocksdb::NewHdfsEnv(FLAGS_hdfs_path, &hdfs);
-
-      options.env = hdfs.get();
+      static std::shared_ptr<rocksdb::Env> env_guard;
+      status = rocksdb::Env::CreateFromUri(config_options, FLAGS_hdfs_path, "",
+                                  &env, &env_guard);
+      if (!status.ok()) {
+        std::cerr << "Error opening database: " << status.ToString() << std::endl;
+        exit(1);
+      }
+      options.env = env;
     }
 
+    if (FLAGS_options_file != "") {
+      config_options.ignore_unknown_options = false;
+      config_options.input_strings_escaped = true;
+      config_options.env = options.env;
+      status = rocksdb::LoadOptionsFromFile(
+          config_options, FLAGS_options_file, &options, &cf_descs);
+    }
+
+    options.create_if_missing = true;
     status = DB::Open(options, FLAGS_db, &db_);
     if (!status.ok()) {
       std::cerr << "Error opening database: " << status.ToString() << std::endl;
