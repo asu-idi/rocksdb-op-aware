@@ -4757,16 +4757,22 @@ class Benchmark {
 
   void Open(Options* opts) {
     #ifdef NETSERVICE
-      std::string server_address = FLAGS_netservice_server_url;
-      fprintf(stdout, "--------------------------------------------------\n");
-      fprintf(stdout, "Netservice enabled. Default options are ignored\n");
-      fprintf(stdout, "Using Server at: %s\n", server_address.c_str());
+      if (FLAGS_netservice_server_url != "") {
+        std::string server_address = FLAGS_netservice_server_url;
+        fprintf(stdout, "--------------------------------------------------\n");
+        fprintf(stdout, "Netservice enabled. Default options are ignored\n");
+        fprintf(stdout, "Using Server at: %s\n", server_address.c_str());
+      } else {
+        if (!InitializeOptionsFromFile(opts)) {
+          InitializeOptionsFromFlags(opts);
+        }
+      }
     #else
       if (!InitializeOptionsFromFile(opts)) {
         InitializeOptionsFromFlags(opts);
       }
     #endif
-      InitializeOptionsGeneral(opts);
+    InitializeOptionsGeneral(opts);
   }
 
   void OpenDb(Options options, const std::string& db_name,
@@ -5139,7 +5145,10 @@ class Benchmark {
     int64_t num_range_deletions = 0;
 
     // Viraj: For NetService
-    NetClient client(grpc::CreateChannel(FLAGS_netservice_server_url, grpc::InsecureChannelCredentials()));
+    #ifdef NETSERVICE
+    if (FLAGS_netservice_server_url != "")
+      NetClient client(grpc::CreateChannel(FLAGS_netservice_server_url, grpc::InsecureChannelCredentials()));
+    #endif
 
     while ((num_per_key_gen != 0) && !duration.Done(entries_per_batch_)) {
       if (duration.GetStage() != stage) {
@@ -5300,7 +5309,11 @@ class Benchmark {
           }
         } else if (FLAGS_num_column_families <= 1) {
         #ifdef NETSERVICE
+        if (FLAGS_netservice_server_url != "") {
           client.BufferedWriter("Put", key.data(), val.data());
+        } else {
+          batch.Put(key, val);
+        }
         #else
           batch.Put(key, val);
         #endif
@@ -5399,6 +5412,11 @@ class Benchmark {
         #ifdef NETSERVICE
           // Viraj: ToDo: Needs to be done after DoWrite is done
           // client.FlushBuffer();
+          if (FLAGS_netservice_server_url != "") {
+            ;
+          } else {
+            s = db_with_cfh->db->Write(write_options_, &batch);
+          }
         #else
           s = db_with_cfh->db->Write(write_options_, &batch);
         #endif
