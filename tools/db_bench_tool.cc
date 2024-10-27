@@ -5146,11 +5146,12 @@ class Benchmark {
 
     // Viraj: For NetService
     #ifdef NETSERVICE
-    if (FLAGS_netservice_server_url != "") {
-      NetClient client(grpc::CreateChannel(FLAGS_netservice_server_url, grpc::InsecureChannelCredentials()));
-    } else {
-      std::unique_ptr<NetClient> client;
-    }
+    NetClient client(grpc::CreateChannel(FLAGS_netservice_server_url, grpc::InsecureChannelCredentials()));
+    // Viraj: To Do. Fix to make it work loacally even if netservice is compiled
+    // if (FLAGS_netservice_server_url != "") {
+    // } else {
+    //   std::unique_ptr<NetClient> client;
+    // }
     #endif
 
     while ((num_per_key_gen != 0) && !duration.Done(entries_per_batch_)) {
