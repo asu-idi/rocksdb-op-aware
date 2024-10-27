@@ -8,10 +8,19 @@ service NetService {
 
 message OperationRequest {
   enum Operation {
-    Put = 0;
-    Get = 1;
-    Delete = 2;
-    BatchPut = 3;
+    // Interal operations. Do not use.
+    ServerGet = 0;
+    ServerPut = 1;
+    CompactionRead = 2;
+    CompactionWrite = 3;
+    FlushWrite = 4;
+
+    // Operations that can be used by the client
+    Get = 5;
+    Put = 6;
+    Delete = 7;
+    // Not tracked by the server
+    BatchPut = 8;
   }
   Operation operation = 1;
   repeated string keys = 2;
