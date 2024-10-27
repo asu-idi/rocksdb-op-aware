@@ -154,7 +154,7 @@ else()
   if (WITH_NETSERVICE)
     # import requirements
     # 1. Protobuf
-    if(NOT DEFINED ENV{Protobuf_DIR})
+    if(NOT DEFINED $ENV{Protobuf_DIR})
       set(Protobuf_DIR /data/viraj/projects/network-project/protobuf-3.7-src/)
     else()
       set(Protobuf_DIR $ENV{Protobuf_DIR})
