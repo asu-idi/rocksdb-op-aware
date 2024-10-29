@@ -1,9 +1,11 @@
 #include <gflags/gflags.h>
-
+#include <csignal>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <thread>
+#include <condition_variable>
+#include <mutex>
 
 // GRPC
 #include <grpcpp/grpcpp.h>
@@ -66,6 +68,9 @@ using GFLAGS_NAMESPACE::SetVersionString;
 std::queue<std::string> optimizationQueue;
 rocksdb::DB* db_;
 std::unique_ptr<Server> server;
+std::condition_variable cv;
+std::mutex cv_m;
+bool shutdown_requested = false;
 int key_count = 0;
 
 // Command line flags
@@ -166,6 +171,16 @@ class NetServiceImpl final : public NetService::Service {
   }
 };
 
+// Signal handler function to shut down the server
+void signalHandler(int signum) {
+  std::cout << "Interrupt signal (" << signum << ") received. Shutting down the server..." << std::endl;
+  {
+    std::lock_guard<std::mutex> lk(cv_m);
+    shutdown_requested = true;
+  }
+  cv.notify_one();
+}
+
 void RunGRPCServer() {
   NetServiceImpl service;
   ServerBuilder builder;
@@ -177,6 +192,16 @@ void RunGRPCServer() {
   server = builder.BuildAndStart();
 
   std::cout << "Server listening on " << FLAGS_server_address << std::endl;
+
+  // Register signal handler for SIGINT
+  std::signal(SIGINT, signalHandler);
+
+  // Wait for shutdown signal
+  std::unique_lock<std::mutex> lk(cv_m);
+  cv.wait(lk, []{ return shutdown_requested; });
+
+  // Shutdown the server
+  server->Shutdown();
   server->Wait();
 }
 
