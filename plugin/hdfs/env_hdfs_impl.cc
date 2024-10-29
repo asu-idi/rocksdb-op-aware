@@ -329,13 +329,23 @@ class HdfsWritableFile: public FSWritableFile {
     }
   }
 
+  bool hasEnding (std::string const &fullString, std::string const &ending) {
+    if (fullString.length() >= ending.length()) {
+        return (0 == fullString.compare (fullString.length() - ending.length(), ending.length(), ending));
+    } else {
+        return false;
+    }
+  }
+
   IOStatus Append(const Slice& data, const IOOptions& /*options*/,
                   IODebugContext* /*dbg*/) override {
     ROCKS_LOG_DEBUG(mylog, "[hdfs] HdfsWritableFile Append %s\n",
                     filename_.c_str());
     std::string opAwareStr = data.ToString();
 
-    if (data.size() != 0 && opCodeToString(this->opAwareFOpts.io_options.operation_name) != "7") {
+    if (hasEnding(filename_, ".log")) {
+      opAwareStr = opAwareStr + "$/0/0opCode" + "1";
+    } else if (data.size() != 0 && opCodeToString(this->opAwareFOpts.io_options.operation_name) != "7") {
       FileOptions foptsloc = this->opAwareFOpts;
       opAwareStr = opAwareStr + "$/0/0opCode" + opCodeToString(foptsloc.io_options.operation_name);
     }
