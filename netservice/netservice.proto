@@ -10,7 +10,7 @@ message OperationRequest {
   enum Operation {
     // Interal operations. Do not use.
     ServerGet = 0;
-    ServerPut = 1;
+    ServerPut = 1; // WAL-Write
     CompactionRead = 2;
     CompactionWrite = 3;
     FlushWrite = 4;

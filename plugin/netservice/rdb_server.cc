@@ -92,7 +92,7 @@ class NetServiceImpl final : public NetService::Service {
     if (FLAGS_hdfs_path != "false") {
       static std::shared_ptr<rocksdb::Env> env_guard;
       status = rocksdb::Env::CreateFromUri(config_options, FLAGS_hdfs_path, "",
-                                  &env, &env_guard);
+                                           &env, &env_guard);
       if (!status.ok()) {
         std::cerr << "Error opening database: " << status.ToString() << std::endl;
         exit(1);
@@ -106,6 +106,8 @@ class NetServiceImpl final : public NetService::Service {
       config_options.env = options.env;
       status = rocksdb::LoadOptionsFromFile(
           config_options, FLAGS_options_file, &options, &cf_descs);
+      options.create_if_missing = true;
+      options.env = env;
     }
 
     options.create_if_missing = true;
@@ -117,8 +119,6 @@ class NetServiceImpl final : public NetService::Service {
   }
 
   ~NetServiceImpl() {
-    server->Shutdown();
-
     delete db_;
   }
 
