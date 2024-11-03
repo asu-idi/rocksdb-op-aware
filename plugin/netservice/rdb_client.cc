@@ -6,6 +6,7 @@ NetClient::NetClient(std::shared_ptr<grpc::Channel> channel) : stub_(NetService:
 std::mutex mtx;
 std::queue<OperationRequest> request_queue;
 std::condition_variable cv;
+const uint32_t IDENTIFICATION_VALUE = 0xABCD;
 bool is_sending = false;
 
 void SetOperation(const std::string& operation) {
@@ -21,6 +22,7 @@ void SetOperation(const std::string& operation) {
 }
 
 bool NetClient::BufferedWriter(const std::string& operation, const std::string& key, const std::string& value) {
+    request.set_identification(IDENTIFICATION_VALUE);
     SetOperation(operation);
     request.add_keys(key);
     request.add_values(value);
