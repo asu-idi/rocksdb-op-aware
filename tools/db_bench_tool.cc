@@ -7,7 +7,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
-#ifdef GFLAGS
+// #ifdef GFLAGS
 #ifdef NUMA
 #include <numa.h>
 #endif
@@ -5314,7 +5314,7 @@ class Benchmark {
         } else if (FLAGS_num_column_families <= 1) {
         #ifdef NETSERVICE
         if (FLAGS_netservice_server_url != "") {
-          client.BufferedWriter("Put", key.data(), val.data());
+          client.BufferedWriter("Put", std::string(key.data(), key.size()), val.data());
         } else {
           batch.Put(key, val);
         }
@@ -8689,4 +8689,4 @@ int db_bench_tool(int argc, char** argv) {
   return 0;
 }
 }  // namespace ROCKSDB_NAMESPACE
-#endif
+// #endif
