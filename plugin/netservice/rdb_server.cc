@@ -94,10 +94,9 @@ class NetServiceImpl final : public NetService::Service {
       status = rocksdb::Env::CreateFromUri(config_options, FLAGS_hdfs_path, "",
                                            &env, &env_guard);
       if (!status.ok()) {
-        std::cerr << "Error opening database: " << status.ToString() << std::endl;
+        std::cerr << "Error creating env from URI: " << status.ToString() << std::endl;
         exit(1);
       }
-      options.env = env;
     }
 
     if (FLAGS_options_file != "") {
@@ -106,11 +105,15 @@ class NetServiceImpl final : public NetService::Service {
       config_options.env = options.env;
       status = rocksdb::LoadOptionsFromFile(
           config_options, FLAGS_options_file, &options, &cf_descs);
-      options.create_if_missing = true;
-      options.env = env;
+      if (!status.ok()) {
+        std::cerr << "Error loading options from file: " << status.ToString() << std::endl;
+        exit(1);
+      }
     }
 
     options.create_if_missing = true;
+    options.env = env;
+
     status = DB::Open(options, FLAGS_db, &db_);
     if (!status.ok()) {
       std::cerr << "Error opening database: " << status.ToString() << std::endl;
@@ -132,7 +135,8 @@ class NetServiceImpl final : public NetService::Service {
           status = db_->Put(rocksdb::WriteOptions(), request->keys(i),
                             request->values(i));
           if (!status.ok()) {
-            break;
+            fprintf(stderr, "Error putting key: %s\n", status.ToString().c_str());
+            exit(1);
           }
           key_count++;
         }
@@ -156,7 +160,9 @@ class NetServiceImpl final : public NetService::Service {
         break;
       }
       default:
+        fprintf(stderr, "Unknown operation\n");
         response->set_result("Unknown operation");
+        break;
     }
 
     if (status.ok()) {
