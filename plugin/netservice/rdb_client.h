@@ -30,6 +30,7 @@ public:
     void SendRequestsFromQueue();
 
 private:
+    uint32_t CalculateTotalLength(const OperationRequest& request);
     std::unique_ptr<NetService::Stub> stub_;
 };
 

@@ -25,8 +25,9 @@ message OperationRequest {
     BatchPut = 8;
   }
   Operation operation = 2;
-  repeated bytes keys = 3;
-  repeated string values = 4;
+  fixed32 total_length = 3;
+  repeated string keys = 4;
+  repeated string values = 5;
 }
 
 message OperationResponse {
