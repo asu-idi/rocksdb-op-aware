@@ -21,33 +21,16 @@ void SetOperation(const std::string& operation) {
     }
 }
 
-uint32_t NetClient::CalculateTotalLength(const OperationRequest& req) {
-    uint32_t total_length = 0;
-
-    total_length += sizeof(req.identification());
-    total_length += sizeof(req.operation());
-
-    for (const auto& key : req.keys()) {
-        total_length += key.size();
-    }
-    for (const auto& value : req.values()) {
-        total_length += value.size();
-    }
-    total_length += sizeof(req.total_length());
-
-    return total_length;
-}
-
 bool NetClient::BufferedWriter(const std::string& operation, const std::string& key, const std::string& value) {
-    request.set_identification(IDENTIFICATION_VALUE);
     SetOperation(operation);
-    request.add_keys("key");
+    request.add_keys(key);
     request.add_values(value);
 
     if (request.keys_size() >= 12000) {
         std::unique_lock<std::mutex> lock(mtx);
+        request.set_identification(IDENTIFICATION_VALUE);
+        request.set_total_length(request.ByteSizeLong());
 
-        request.set_total_length(CalculateTotalLength(request));
         // Backup the current request and queue it
         request_backup = request;
         request_queue.push(request_backup);
