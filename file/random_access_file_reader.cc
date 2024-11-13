@@ -122,7 +122,14 @@ IOStatus RandomAccessFileReader::Read(const IOOptions& opts, uint64_t offset,
 
   IOStatus io_s;
   IOOptions opts_copy = opts;
-  opts_copy.operation_name = OperationName::kRead;
+
+  if (opts_copy.io_activity == Env::IOActivity::kGet) {
+    opts_copy.operation_name = OperationName::kRead;
+  } 
+  else if (opts_copy.io_activity == Env::IOActivity::kCompaction) {
+    opts_copy.operation_name = OperationName::kCompactionRead;
+  }
+  
   uint64_t elapsed = 0;
   size_t alignment = file_->GetRequiredBufferAlignment();
   bool is_aligned = false;
