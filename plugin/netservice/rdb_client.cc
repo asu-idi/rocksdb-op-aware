@@ -21,6 +21,32 @@ void SetOperation(const std::string& operation) {
     }
 }
 
+bool NetClient::SingleWriter(const std::string& operation, const std::string& key, std::string value) {
+    SetOperation(operation);
+    request.add_keys(key);
+    if (operation != "Get") {
+        request.add_values(value);
+    }
+
+    // Send the request and wait for the response
+    OperationResponse response;
+    grpc::ClientContext context;
+    grpc::Status status = stub_->OperationService(&context, request, &response);
+
+    if (!status.ok()) {
+        std::cerr << "RPC failed: " << status.error_message() << std::endl;
+        // Retry logic or error handling can go here
+        exit(1);
+    }
+
+    if (operation == "Get") {
+        fprintf(stderr, "Get response: %s\n", response.get_result().c_str());
+        value = response.get_result();
+    }
+
+    return true;
+}
+
 bool NetClient::BufferedWriter(const std::string& operation, const std::string& key, const std::string& value) {
     SetOperation(operation);
     request.add_keys(key);

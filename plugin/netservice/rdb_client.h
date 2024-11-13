@@ -27,6 +27,7 @@ public:
     NetClient(std::shared_ptr<grpc::Channel> channel);
     bool FlushBuffer();
     bool BufferedWriter(const std::string& operation, const std::string& key, const std::string& value);
+    bool SingleWriter(const std::string& operation, const std::string& key, std::string value);
     void SendRequestsFromQueue();
 
 private:

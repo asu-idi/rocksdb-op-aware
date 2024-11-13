@@ -6012,6 +6012,10 @@ class Benchmark {
       ts_guard.reset(new char[user_timestamp_size_]);
     }
 
+    #ifdef NETSERVICE
+      NetClient client(grpc::CreateChannel(FLAGS_netservice_server_url, grpc::InsecureChannelCredentials()));
+    #endif
+
     Duration duration(FLAGS_duration, reads_);
     while (!duration.Done(1)) {
       DBWithColumnFamilies* db_with_cfh = SelectDBWithCfh(thread);
@@ -6035,12 +6039,17 @@ class Benchmark {
       GenerateKeyFromInt(key_rand, FLAGS_num, &key);
       read++;
       std::string ts_ret;
-      std::string* ts_ptr = nullptr;
-      if (user_timestamp_size_ > 0) {
-        ts = mock_app_clock_->GetTimestampForRead(thread->rand, ts_guard.get());
-        options.timestamp = &ts;
-        ts_ptr = &ts_ret;
-      }
+      
+      #ifdef NETSERVICE
+      #else
+        std::string* ts_ptr = nullptr;
+        if (user_timestamp_size_ > 0) {
+          ts = mock_app_clock_->GetTimestampForRead(thread->rand, ts_guard.get());
+          options.timestamp = &ts;
+          ts_ptr = &ts_ret;
+        }
+      #endif
+
       Status s;
       pinnable_val.Reset();
       for (size_t i = 0; i < pinnable_vals.size(); ++i) {
@@ -6073,7 +6082,13 @@ class Benchmark {
               &get_merge_operands_options, &number_of_operands);
         }
       } else {
-        s = db_with_cfh->db->Get(options, cfh, key, &pinnable_val, ts_ptr);
+        #ifdef NETSERVICE
+          std::string str_val;
+          client.SingleWriter("Get", key.ToString(), str_val);
+          pinnable_val = PinnableSlice(&str_val);
+        #else
+          s = db_with_cfh->db->Get(options, cfh, key, &pinnable_val, ts_ptr);
+        #endif
       }
 
       if (s.ok()) {

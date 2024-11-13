@@ -153,6 +153,7 @@ class NetServiceImpl final : public NetService::Service {
       case OperationRequest::Get: {
         std::string value;
         status = db_->Get(rocksdb::ReadOptions(), request->keys(0), &value);
+        response->set_get_result(value);
         break;
       }
       case OperationRequest::Delete: {

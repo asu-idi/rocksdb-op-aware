@@ -32,4 +32,5 @@ message OperationRequest {
 
 message OperationResponse {
   string result = 1;
+  string get_result = 2;
 }
