@@ -82,7 +82,7 @@ DEFINE_string(options_file, "../plugin/netservice/db_bench_options.ini",
 
 class NetServiceImpl final : public NetService::Service {
  public:
-  NetServiceImpl() {
+  NetServiceImpl() : next_sequence_number_(0), processing_thread_(&NetServiceImpl::ProcessRequests, this) {
     Options options;
     ConfigOptions config_options;
     rocksdb::Status status;
@@ -122,60 +122,141 @@ class NetServiceImpl final : public NetService::Service {
   }
 
   ~NetServiceImpl() {
+    {
+      std::lock_guard<std::mutex> lock(request_queue_mtx_);
+      shutdown_ = true;
+    }
+    request_queue_cv_.notify_all();
+    if (processing_thread_.joinable()) {
+      processing_thread_.join();
+    }
     delete db_;
   }
 
   Status OperationService(ServerContext* context,
-                          const OperationRequest* request,
-                          OperationResponse* response) override {
-    rocksdb::Status status;
-    switch (request->operation()) {
-      case OperationRequest::Put: {
-        for (int i = 0; i < request->keys_size(); i++) {
-          status = db_->Put(rocksdb::WriteOptions(), request->keys(i),
-                            request->values(i));
-          if (!status.ok()) {
-            fprintf(stderr, "Error putting key: %s\n", status.ToString().c_str());
-            exit(1);
-          }
-          key_count++;
-        }
-        break;
-      }
-      case OperationRequest::BatchPut: {
-        rocksdb::WriteBatch batch;
-        for (int i = 0; i < request->keys_size(); i++) {
-          batch.Put(request->keys(i), request->values(i));
-        }
-        status = db_->Write(rocksdb::WriteOptions(), &batch);
-        break;
-      }
-      case OperationRequest::Get: {
-        std::string value;
-        status = db_->Get(rocksdb::ReadOptions(), request->keys(0), &value);
-        response->set_get_result(value);
-        break;
-      }
-      case OperationRequest::Delete: {
-        status = db_->Delete(rocksdb::WriteOptions(), request->keys(0));
-        break;
-      }
-      default:
-        fprintf(stderr, "Unknown operation\n");
-        response->set_result("Unknown operation");
-        break;
-    }
+                        const OperationRequest* request,
+                        OperationResponse* response) override {
+    // Create a promise for the response
+    auto response_promise = std::make_shared<std::promise<OperationResponse>>();
+    auto response_future = response_promise->get_future();
 
-    if (status.ok()) {
-      response->set_result("OK");
-    } else {
-      response->set_result(status.ToString());
+    {
+      std::lock_guard<std::mutex> lock(request_queue_mtx_);
+      request_queue_[request->sequence_number()] = std::make_pair(*request, response_promise);
     }
-
-    fprintf(stderr, "Key count: %d\n", key_count);
+    request_queue_cv_.notify_one();
 
     return Status::OK;
   }
+
+ private:
+  void ProcessRequests() {
+    while (true) {
+      std::pair<OperationRequest, std::shared_ptr<std::promise<OperationResponse>>> current_request;
+      {
+        std::unique_lock<std::mutex> lock(request_queue_mtx_);
+        request_queue_cv_.wait(lock, [&]() {
+          return shutdown_ || (!request_queue_.empty() && request_queue_.begin()->first == next_sequence_number_);
+        });
+
+        if (shutdown_ && request_queue_.empty()) {
+          break;
+        }
+
+        auto it = request_queue_.begin();
+        if (it->first == next_sequence_number_) {
+          current_request = it->second;
+          request_queue_.erase(it);
+        } else {
+          continue;
+        }
+      }
+
+      // process current request
+      const OperationRequest& request = current_request.first;
+      OperationResponse response;
+      rocksdb::Status status;
+
+      // Set the sequence number
+      response.set_sequence_number(request->sequence_number());
+
+      switch (request->operation()) {
+        case OperationRequest::Put: {
+          for (int i = 0; i < request->keys_size(); i++) {
+            status = db_->Put(rocksdb::WriteOptions(), request->keys(i),
+                              request->values(i));
+            if (!status.ok()) {
+              fprintf(stderr, "Error putting key: %s\n", status.ToString().c_str());
+              response.set_result(status.ToString());
+              break;
+            }
+            key_count++;
+          }
+          break;
+        }
+        case OperationRequest::BatchPut: {
+          rocksdb::WriteBatch batch;
+          for (int i = 0; i < request->keys_size(); i++) {
+            batch.Put(request->keys(i), request->values(i));
+          }
+          status = db_->Write(rocksdb::WriteOptions(), &batch);
+          if (!status.ok()) {
+            fprintf(stderr, "Error in batch put: %s\n", status.ToString().c_str());
+            response.set_result(status.ToString());
+            break;
+          }
+          key_count += request->keys_size();
+          break;
+        }
+        case OperationRequest::Get: {
+          std::string value;
+          status = db_->Get(rocksdb::ReadOptions(), request->keys(0), &value);
+          if (status.ok()) {
+            response.set_get_result(value);
+          } else if (status.IsNotFound()) {
+            response.set_get_result("Key not found");
+          } else {
+            response.set_get_result("Error: " + status.ToString());
+          }
+          break;
+        }
+        case OperationRequest::Delete: {
+          status = db_->Delete(rocksdb::WriteOptions(), request->keys(0));
+          if (!status.ok()) {
+            fprintf(stderr, "Error deleting key: %s\n", status.ToString().c_str());
+            response.set_result(status.ToString());
+            break;
+          }
+          key_count--;
+          break;
+        }
+        default:
+          fprintf(stderr, "Unknown operation\n");
+          response.set_result("Unknown operation");
+          break;
+      }
+
+      if (status.ok()) {
+        response.set_result("OK");
+      } else {
+        response.set_result(status.ToString());
+      }
+
+      fprintf(stderr, "Key count: %d\n", key_count);
+
+      // Set the response in the promise
+      current_request.second->set_value(response);
+      next_sequence_number_++;
+    }
+  }
+
+  std::mutex request_queue_mtx_;
+  std::condition_variable request_queue_cv_;
+  // store copies of OperationRequest and a promise for the response
+  std::map<uint64_t, std::pair<OperationRequest, std::shared_ptr<std::promise<OperationResponse>>>> request_queue_;
+  uint64_t next_sequence_number_;
+  bool shutdown_ = false;
+  std::thread processing_thread_;
 };
 
 // Signal handler function to shut down the server

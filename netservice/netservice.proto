@@ -26,11 +26,13 @@ message OperationRequest {
   }
   Operation operation = 2;
   fixed32 total_length = 3;
-  repeated bytes keys = 4;
-  repeated string values = 5;
+  uint64 sequence_number = 4;
+  repeated bytes keys = 5;
+  repeated string values = 6;
 }
 
 message OperationResponse {
-  string result = 1;
-  string get_result = 2;
+  uint64 sequence_number = 1;
+  string result = 2;
+  string get_result = 3;
 }
