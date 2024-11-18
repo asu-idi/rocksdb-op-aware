@@ -67,8 +67,6 @@ void NetClient::SetOperation(OperationRequest& request, const std::string& opera
         request.set_operation(OperationRequest::Delete);
     } else if (operation == "BatchPut") {
         request.set_operation(OperationRequest::BatchPut);
-    } else {
-        request.set_operation(OperationRequest::Put); // 默认操作
     }
 }
 
@@ -81,19 +79,19 @@ bool NetClient::BufferedWriter(const std::string& operation, const std::string& 
     if (request_.keys_size() >= 12000) {
         request_.set_identification(IDENTIFICATION_VALUE);
         request_.set_total_length(request_.ByteSizeLong());
-        request_.set_sequence_number(sequence_number_++); // 设置序列号
+        request_.set_sequence_number(sequence_number_++); // set seq_number
 
         OperationRequest temp_request;
         temp_request.Swap(&request_);
         request_.Clear();
 
         {
-            // 将请求保存到待发送映射中
+            // save request to the mapping
             std::lock_guard<std::mutex> pending_lock(pending_requests_mtx_);
             pending_requests_[temp_request.sequence_number()] = temp_request;
         }
 
-        // 将发送任务添加到线程池
+        // add request task to thread pool
         send_thread_pool_.Enqueue([this, temp_request]() {
             SendBufferedRequests(temp_request);
         });
@@ -106,19 +104,19 @@ bool NetClient::FlushBuffer() {
     if (request_.keys_size() > 0) {
         request_.set_identification(IDENTIFICATION_VALUE);
         request_.set_total_length(request_.ByteSizeLong());
-        request_.set_sequence_number(sequence_number_++); // 设置序列号
+        request_.set_sequence_number(sequence_number_++); // set seq_number
 
         OperationRequest temp_request;
         temp_request.Swap(&request_);
         request_.Clear();
 
         {
-            // 将请求保存到待发送映射中
+            // save request to the mapping
             std::lock_guard<std::mutex> pending_lock(pending_requests_mtx_);
             pending_requests_[temp_request.sequence_number()] = temp_request;
         }
 
-        // 将发送任务添加到线程池
+        // add request task to thread pool
         send_thread_pool_.Enqueue([this, temp_request]() {
             SendBufferedRequests(temp_request);
         });
@@ -127,7 +125,7 @@ bool NetClient::FlushBuffer() {
 }
 
 void NetClient::SendBufferedRequests(OperationRequest request) {
-    // 异步 gRPC 调用
+    // asynchronous grpc call
     AsyncClientCall* call = new AsyncClientCall;
     call->sequence_number = request.sequence_number();
     call->response_reader = stub_->AsyncOperationService(&call->context, request, &cq_);
@@ -143,11 +141,10 @@ void NetClient::ProcessCompletionQueue() {
             if (!call->status.ok()) {
                 std::cerr << "RPC failed: " << call->status.error_message() << std::endl;
             } else {
-                // 根据序列号找到对应的请求
+                // find request based on seq number
                 std::lock_guard<std::mutex> pending_lock(pending_requests_mtx_);
                 auto it = pending_requests_.find(call->sequence_number);
                 if (it != pending_requests_.end()) {
-                    // 处理成功的响应
                     pending_requests_.erase(it);
                 }
             }
@@ -164,7 +161,7 @@ bool NetClient::SingleWriter(const std::string& operation, const std::string& ke
     request.set_identification(IDENTIFICATION_VALUE);
     request.add_keys(key);
     request.set_total_length(request.ByteSizeLong());
-    request.set_sequence_number(sequence_number_++); // 设置序列号
+    request.set_sequence_number(sequence_number_++); // set seq_number
 
     if (operation != "Get") {
         request.add_values(value);
