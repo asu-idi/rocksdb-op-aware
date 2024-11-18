@@ -180,10 +180,10 @@ class NetServiceImpl final : public NetService::Service {
       // Set the sequence number
       response.set_sequence_number(request.sequence_number());
 
-      switch (request->operation()) {
+      switch (request.operation()) {
         case OperationRequest::Put: {
           for (int i = 0; i < request.keys_size(); i++) {
-            status = db_->Put(rocksdb::WriteOptions(), request->keys(i),
+            status = db_->Put(rocksdb::WriteOptions(), request.keys(i),
                               request.values(i));
             if (!status.ok()) {
               fprintf(stderr, "Error putting key: %s\n", status.ToString().c_str());
