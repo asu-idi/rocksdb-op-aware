@@ -149,6 +149,27 @@ class NetServiceImpl final : public NetService::Service {
     return Status::OK;
   }
 
+  // synchronous version
+  // Status OperationService(ServerContext* context,
+  //                       const OperationRequest* request,
+  //                       OperationResponse* response) override {
+  //   // Create a promise for the response
+  //   auto response_promise = std::make_shared<std::promise<OperationResponse>>();
+  //   auto response_future = response_promise->get_future();
+
+  //   {
+  //       std::lock_guard<std::mutex> lock(request_queue_mtx_);
+  //       request_queue_[request->sequence_number()] = std::make_pair(*request, response_promise);
+  //   }
+  //   request_queue_cv_.notify_one();
+
+  //   // Wait for the response to be processed
+  //   OperationResponse processed_response = response_future.get();
+  //   *response = processed_response;
+
+  //   return Status::OK;
+  // }
+
  private:
   void ProcessRequests() {
     while (true) {
