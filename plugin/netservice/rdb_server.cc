@@ -178,13 +178,13 @@ class NetServiceImpl final : public NetService::Service {
       rocksdb::Status status;
 
       // Set the sequence number
-      response.set_sequence_number(request->sequence_number());
+      response.set_sequence_number(request.sequence_number());
 
       switch (request->operation()) {
         case OperationRequest::Put: {
-          for (int i = 0; i < request->keys_size(); i++) {
+          for (int i = 0; i < request.keys_size(); i++) {
             status = db_->Put(rocksdb::WriteOptions(), request->keys(i),
-                              request->values(i));
+                              request.values(i));
             if (!status.ok()) {
               fprintf(stderr, "Error putting key: %s\n", status.ToString().c_str());
               response.set_result(status.ToString());
@@ -196,8 +196,8 @@ class NetServiceImpl final : public NetService::Service {
         }
         case OperationRequest::BatchPut: {
           rocksdb::WriteBatch batch;
-          for (int i = 0; i < request->keys_size(); i++) {
-            batch.Put(request->keys(i), request->values(i));
+          for (int i = 0; i < request.keys_size(); i++) {
+            batch.Put(request.keys(i), request.values(i));
           }
           status = db_->Write(rocksdb::WriteOptions(), &batch);
           if (!status.ok()) {
@@ -205,12 +205,12 @@ class NetServiceImpl final : public NetService::Service {
             response.set_result(status.ToString());
             break;
           }
-          key_count += request->keys_size();
+          key_count += request.keys_size();
           break;
         }
         case OperationRequest::Get: {
           std::string value;
-          status = db_->Get(rocksdb::ReadOptions(), request->keys(0), &value);
+          status = db_->Get(rocksdb::ReadOptions(), request.keys(0), &value);
           if (status.ok()) {
             response.set_get_result(value);
           } else if (status.IsNotFound()) {
@@ -221,7 +221,7 @@ class NetServiceImpl final : public NetService::Service {
           break;
         }
         case OperationRequest::Delete: {
-          status = db_->Delete(rocksdb::WriteOptions(), request->keys(0));
+          status = db_->Delete(rocksdb::WriteOptions(), request.keys(0));
           if (!status.ok()) {
             fprintf(stderr, "Error deleting key: %s\n", status.ToString().c_str());
             response.set_result(status.ToString());
