@@ -134,9 +134,10 @@ bool NetClient::SendRequest(OperationRequest& request) {
         return false;
     }
 
-    if (request.operation() == OperationRequest::Get) {
-        std::cout << "Get response: " << response_.get_result() << std::endl;
-    }
+    // To Do: Add response handling
+    // if (request.operation() == OperationRequest::Get) {
+    //     std::cout << "Get response: " << response_.get_result() << std::endl;
+    // }
 
     return true;
 }

@@ -6535,6 +6535,10 @@ class Benchmark {
       use_random_modeling = true;
     }
 
+    #ifdef NETSERVICE
+      NetClient client(grpc::CreateChannel(FLAGS_netservice_server_url, grpc::InsecureChannelCredentials()));
+    #endif
+
     Duration duration(FLAGS_duration, reads_);
     while (!duration.Done(1)) {
       DBWithColumnFamilies* db_with_cfh = SelectDBWithCfh(thread);
@@ -6590,15 +6594,22 @@ class Benchmark {
       if (query_type == 0) {
         // the Get query
         gets++;
-        if (FLAGS_num_column_families > 1) {
-          s = db_with_cfh->db->Get(read_options_, db_with_cfh->GetCfh(key_rand),
-                                   key, &pinnable_val);
-        } else {
+        #ifdef NETSERVICE
           pinnable_val.Reset();
-          s = db_with_cfh->db->Get(read_options_,
-                                   db_with_cfh->db->DefaultColumnFamily(), key,
-                                   &pinnable_val);
-        }
+          std::string str_val;
+          client.SingleWriter("Get", key.ToString(), str_val);
+          pinnable_val = PinnableSlice(&str_val);
+        #else
+          if (FLAGS_num_column_families > 1) {
+            s = db_with_cfh->db->Get(read_options_, db_with_cfh->GetCfh(key_rand),
+                                    key, &pinnable_val);
+          } else {
+            pinnable_val.Reset();
+            s = db_with_cfh->db->Get(read_options_,
+                                    db_with_cfh->db->DefaultColumnFamily(), key,
+                                    &pinnable_val);
+          }
+        #endif
 
         if (s.ok()) {
           get_found++;
@@ -6625,13 +6636,20 @@ class Benchmark {
         }
         total_val_size += val_size;
 
-        s = db_with_cfh->db->Put(
-            write_options_, key,
-            gen.Generate(static_cast<unsigned int>(val_size)));
-        if (!s.ok()) {
-          fprintf(stderr, "put error: %s\n", s.ToString().c_str());
-          ErrorExit();
-        }
+        #ifdef NETSERVICE
+          Slice put_val = gen.Generate(static_cast<unsigned int>(val_size));
+          std::string put_val_str = put_val.ToString();
+          client.SingleWriter("Put", std::string(key.data(), key.size()), put_val_str);
+        #else
+          s = db_with_cfh->db->Put(
+              write_options_, key,
+              gen.Generate(static_cast<unsigned int>(val_size)));
+          if (!s.ok()) {
+            fprintf(stderr, "put error: %s\n", s.ToString().c_str());
+            ErrorExit();
+          }
+        #endif
+
 
         if (thread->shared->write_rate_limiter && puts % 100 == 0) {
           thread->shared->write_rate_limiter->Request(100, Env::IO_HIGH,
