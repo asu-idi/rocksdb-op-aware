@@ -1,11 +1,12 @@
 #include <gflags/gflags.h>
+
+#include <condition_variable>
 #include <csignal>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
-#include <condition_variable>
-#include <mutex>
 
 // GRPC
 #include <grpcpp/grpcpp.h>
@@ -94,7 +95,8 @@ class NetServiceImpl final : public NetService::Service {
       status = rocksdb::Env::CreateFromUri(config_options, FLAGS_hdfs_path, "",
                                            &env, &env_guard);
       if (!status.ok()) {
-        std::cerr << "Error creating env from URI: " << status.ToString() << std::endl;
+        std::cerr << "Error creating env from URI: " << status.ToString()
+                  << std::endl;
         exit(1);
       }
     }
@@ -103,10 +105,11 @@ class NetServiceImpl final : public NetService::Service {
       config_options.ignore_unknown_options = false;
       config_options.input_strings_escaped = true;
       config_options.env = options.env;
-      status = rocksdb::LoadOptionsFromFile(
-          config_options, FLAGS_options_file, &options, &cf_descs);
+      status = rocksdb::LoadOptionsFromFile(config_options, FLAGS_options_file,
+                                            &options, &cf_descs);
       if (!status.ok()) {
-        std::cerr << "Error loading options from file: " << status.ToString() << std::endl;
+        std::cerr << "Error loading options from file: " << status.ToString()
+                  << std::endl;
         exit(1);
       }
     }
@@ -121,9 +124,7 @@ class NetServiceImpl final : public NetService::Service {
     }
   }
 
-  ~NetServiceImpl() {
-    delete db_;
-  }
+  ~NetServiceImpl() { delete db_; }
 
   Status OperationService(ServerContext* context,
                           const OperationRequest* request,
@@ -135,7 +136,8 @@ class NetServiceImpl final : public NetService::Service {
           status = db_->Put(rocksdb::WriteOptions(), request->keys(i),
                             request->values(i));
           if (!status.ok()) {
-            fprintf(stderr, "Error putting key: %s\n", status.ToString().c_str());
+            fprintf(stderr, "Error putting key: %s\n",
+                    status.ToString().c_str());
             exit(1);
           }
           key_count++;
@@ -180,7 +182,8 @@ class NetServiceImpl final : public NetService::Service {
 
 // Signal handler function to shut down the server
 void signalHandler(int signum) {
-  std::cout << "Interrupt signal (" << signum << ") received. Shutting down the server..." << std::endl;
+  std::cout << "Interrupt signal (" << signum
+            << ") received. Shutting down the server..." << std::endl;
   {
     std::lock_guard<std::mutex> lk(cv_m);
     shutdown_requested = true;
@@ -205,7 +208,7 @@ void RunGRPCServer() {
 
   // Wait for shutdown signal
   std::unique_lock<std::mutex> lk(cv_m);
-  cv.wait(lk, []{ return shutdown_requested; });
+  cv.wait(lk, [] { return shutdown_requested; });
 
   // Shutdown the server
   server->Shutdown();
