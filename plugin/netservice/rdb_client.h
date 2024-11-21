@@ -22,7 +22,7 @@ using netservice::OperationResponse;
 
 class NetClient {
  public:
-  NetClient(std::shared_ptr<grpc::Channel> channel, int batch_size = 12000,
+  NetClient(const std::vector<std::shared_ptr<grpc::Channel>>& channels, int batch_size = 12000,
             size_t queue_size = 10);
   ~NetClient();
 
@@ -34,27 +34,24 @@ class NetClient {
   void Shutdown();
 
  private:
-  void ProcessorThread();
-  void StartThreadPool(int num_threads);
-  bool SendRequest(OperationRequest& request);
+  void ProcessorThread(int stub_index);  // one stub for one client
+  void StartThreadPool();
+  bool SendRequest(OperationRequest& request, NetService::Stub* stub);
   void SetOperation(OperationRequest& request, const std::string& operation);
 
   static constexpr uint32_t IDENTIFICATION_VALUE = 0xABCD;
-  const int BATCH_SIZE = 12000;
-  const size_t QUEUE_SIZE = 10;
+  const int BATCH_SIZE;
+  const size_t QUEUE_SIZE;
 
-  std::unique_ptr<NetService::Stub> stub_ = nullptr;
+  std::vector<std::unique_ptr<NetService::Stub>> stubs_; 
   std::mutex mutex_;
   std::condition_variable condition_;
   std::queue<OperationRequest> request_queue_;
   std::atomic<bool> running_{true};
-  std::thread processor_thread_;
   std::vector<std::thread> worker_threads_;
 
   // Reusable objects for performance
   OperationRequest current_batch_;
-  ClientContext context_;
-  OperationResponse response_;
 };
 
 #endif
