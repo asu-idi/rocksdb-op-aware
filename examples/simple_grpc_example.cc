@@ -18,7 +18,12 @@ int main() {
     std::string value_prefix = "value";
 
     // Create the NetClient instance once
-    NetClient client(grpc::CreateChannel(server_address, grpc::InsecureChannelCredentials()));
+    // NetClient client(grpc::CreateChannel(server_address, grpc::InsecureChannelCredentials()));
+    std::vector<std::shared_ptr<grpc::Channel>> channels;
+    for (int i = 0; i < 4; i++) {
+      channels.push_back(grpc::CreateChannel(server_address, grpc::InsecureChannelCredentials()));
+    }
+    NetClient client(channels, 12000, 10);
 
     // Loop 1000000 times to send data
     for (int i = 0; i < 1000000; i++) {

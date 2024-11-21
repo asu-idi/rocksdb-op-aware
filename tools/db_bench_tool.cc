@@ -5146,7 +5146,12 @@ class Benchmark {
 
     // Viraj: For NetService
     #ifdef NETSERVICE
-    NetClient client(grpc::CreateChannel(FLAGS_netservice_server_url, grpc::InsecureChannelCredentials()), 12000, 10);
+    std::vector<std::shared_ptr<grpc::Channel>> channels;
+    for (int i = 0; i < 10; i++) {
+      channels.push_back(grpc::CreateChannel(FLAGS_netservice_server_url, grpc::InsecureChannelCredentials()));
+    }
+    NetClient client(channels, 12000, 10);
+    // NetClient client(grpc::CreateChannel(FLAGS_netservice_server_url, grpc::InsecureChannelCredentials()), 12000, 10);
     // Viraj: To Do. Fix to make it work loacally even if netservice is compiled
     // if (FLAGS_netservice_server_url != "") {
     // } else {
@@ -6013,7 +6018,11 @@ class Benchmark {
     }
 
     #ifdef NETSERVICE
-      NetClient client(grpc::CreateChannel(FLAGS_netservice_server_url, grpc::InsecureChannelCredentials()));
+      std::vector<std::shared_ptr<grpc::Channel>> channels;
+      for (int i = 0; i < 10; i++) {
+        channels.push_back(grpc::CreateChannel(FLAGS_netservice_server_url, grpc::InsecureChannelCredentials()));
+      }
+      NetClient client(channels, 12000, 10);
     #endif
 
     Duration duration(FLAGS_duration, reads_);
@@ -6536,7 +6545,11 @@ class Benchmark {
     }
 
     #ifdef NETSERVICE
-      NetClient client(grpc::CreateChannel(FLAGS_netservice_server_url, grpc::InsecureChannelCredentials()));
+      std::vector<std::shared_ptr<grpc::Channel>> channels;
+      for (int i = 0; i < 10; i++) {
+        channels.push_back(grpc::CreateChannel(FLAGS_netservice_server_url, grpc::InsecureChannelCredentials()));
+      }
+      NetClient client(channels, 12000, 10);
     #endif
 
     Duration duration(FLAGS_duration, reads_);

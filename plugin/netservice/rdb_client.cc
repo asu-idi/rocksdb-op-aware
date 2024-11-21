@@ -56,7 +56,7 @@ bool NetClient::BufferedWriter(const std::string& operation, const std::string& 
                                const std::string& value) {
   std::unique_lock<std::mutex> lock(mutex_);
   // if the request queue is full, wait (to avoid too many requests in memory)
-  while (request_queue_.size() >= QUEUE_SIZE) {
+  while (request_queue_.size() >= 20*QUEUE_SIZE) {
     condition_.wait(lock);
   }
 
